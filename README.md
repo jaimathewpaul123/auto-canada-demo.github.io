@@ -1,0 +1,70 @@
+# Capital CDJR — mock site
+
+Static, click-through prototype of `capitaljeep.com`. **105 HTML pages, no build step, no
+backend.** Nothing submits, calculates, or reflects real availability.
+
+## Open it
+
+```
+open index.html                     # works straight from the filesystem
+python3 -m http.server 8000         # or serve it, then visit localhost:8000
+```
+
+## The pages that matter
+
+| Page | Path |
+|---|---|
+| Home | `index.html` |
+| New inventory search | `new/inventory/search.html` |
+| Demo inventory search | `demos/search.html` |
+| Pre-owned inventory search | `used/search.html` |
+| Vehicle detail (×95) | `vehicle/<id>.html` |
+| Clearance (filtered listing) | `pages/clearance.html` |
+| Electric & Hybrid (filtered listing) | `pages/electric.html` |
+| About / Service & Parts / Financing / Offers | `pages/*.html` |
+
+Paths mirror the real site, so every URL in the brief resolves at the same location.
+
+## Navigation rule
+
+Every top-level menu item has a real page behind it. Dropdown entries are **labels only** —
+they all navigate to their parent page, because that is where the content lives. The two
+exceptions are the inventory menus (New Vehicles, Demos, Pre-Owned), whose dropdown entries
+point at genuine search and vehicle-detail pages.
+
+So "Service & Parts → Tire finder" lands on `pages/service.html`, which has a tire-finder
+section, rather than on a page that only apologises for not existing.
+
+## What works
+
+Filters, sort, and grid/list toggle on the three search pages are wired up in
+`js/site.js` and act on the rendered cards — enough to demo the interaction. Nav
+dropdowns are CSS hover menus; the mobile breakpoint collapses them behind a button.
+
+`pages/clearance.html` and `pages/electric.html` are full search pages too, built from
+filtered slices of the same inventory.
+
+Everything else (forms, financing, appointments, pagination beyond page 1) is inert.
+
+## Where the content came from
+
+Vehicle data was scraped once from the live site's JSON-LD and card markup, then frozen
+into `_build/inventory.json`. Images are **hotlinked** to the dealership's CDN
+(`imagescdn.d2cmedia.ca`, `carimages.d2cmedia.ca`) — they will break if that CDN changes.
+Swap the `img` fields in `inventory.json` for local files if you need this to work offline.
+
+The live search page only server-renders three new models, so 17 listings covering
+Wrangler, Gladiator, Recon, Ram 1500/2500/3500, Durango, Charger and Pacifica are
+**fabricated** (VINs prefixed `MOCK`) against real manufacturer profile images, so the
+demo shows the whole lineup. All other listings are real.
+
+## Rebuilding
+
+`_build/` holds the generator. Edit `inventory.json` or `gen.py`, then:
+
+```
+cd _build && python3 gen.py
+```
+
+It rewrites every page from the shared header/footer/card templates in `gen.py`.
+`css/site.css` and `js/site.js` are hand-written and are not touched by the generator.
