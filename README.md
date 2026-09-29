@@ -18,12 +18,21 @@ python3 -m http.server 8000         # or serve it, then visit localhost:8000
 | New inventory search | `new/inventory/search.html` |
 | Demo inventory search | `demos/search.html` |
 | Pre-owned inventory search | `used/search.html` |
-| Vehicle detail (×95) | `vehicle/<id>.html` |
+| Vehicle detail (×95) | `new/inventory/`, `used/` or `demos/` + `<year>-<Make>-<Model>-id<id>.html` |
 | Clearance (filtered listing) | `pages/clearance.html` |
 | Electric & Hybrid (filtered listing) | `pages/electric.html` |
 | About / Service & Parts / Financing / Offers | `pages/*.html` |
 
 Paths mirror the real site, so every URL in the brief resolves at the same location.
+
+## Contracts for other applications
+
+- [FILTERS.md](FILTERS.md): the search-page filter state and the vehicle compare
+  selection, carried in the URL query string.
+- [PAGE-CONTEXT.md](PAGE-CONTEXT.md): which kind of page this is (from the URL or
+  `window.pageContext`), the vehicle on a VDP, and the `pagecontext:*` events.
+
+The reasoning behind both is in [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## Navigation rule
 

@@ -3,7 +3,7 @@
 import json, os, re, html, collections
 
 SRC  = os.path.dirname(os.path.abspath(__file__))
-OUT  = '/Users/jaimathewpaul/Desktop/capitaljeep-mock'
+OUT  = os.path.dirname(SRC)
 INV  = json.load(open(os.path.join(SRC, 'inventory.json')))
 
 DEALER   = 'Capital Chrysler Dodge Jeep Ram'
@@ -11,6 +11,11 @@ ADDRESS  = '1311 101 ST. SW, Edmonton, AB T6X 1A1'
 SALES    = '587-416-1056'
 SERVICE  = '587-854-6920'
 LOGO     = 'https://www.capitaljeep.com/images/Logo/Capital-Logo.webp'
+# Optimy chat plugin, installed on every page (QA build).
+OPTIMY_LICENSE_KEY = '0b2d101c-60bc-11eb-9752-75ceaf0e3ecf'
+OPTIMY_SCRIPT      = 'https://delonghi.qa.optimycdn.com/optimy.js'
+# Reported to Optimy as guest_hostname; must be a domain registered for the tenant.
+OPTIMY_GUEST_HOSTNAME = 'https://optimy-qa.myshopify.com/'
 MAPS     = ('https://www.google.ca/maps/dir/?api=1&destination=Capital%2BChrysler'
             '%2BDodge%2BJeep%2BRam%2C1311+101+ST.+SW%2CEdmonton%2CAB%2CT6X+1A1')
 
@@ -44,9 +49,35 @@ for cond, rows in INV.items():
         v['cyl']   = s.get('Cylinders', '')
         v['engine']= s.get('Engine', '')
         v['name']  = '{} {} {}'.format(v['year'], v['make'], v['model']).strip()
+        parts = [p.strip() for p in (v.get('trim') or '').split('|') if p.strip()]
+        v['trimbase'] = parts[0] if parts else ''
+        v['options']  = parts[1:]
+
+# ---------------------------------------------------------------- VDP paths
+# VDPs live at the record's `url`, mirroring the real site:
+#   /new/inventory/<year>-<Make>-<Model>-id<id>.html, /used/..., /demos/...
+# The URL alone therefore identifies a VDP and its inventory type (see PAGE-CONTEXT.md).
+COND_SEG = {'new': 'new/inventory', 'demos': 'demos', 'used': 'used'}
+
+def _slug(s):
+    return re.sub(r'[^A-Za-z0-9]+', '_', s or '').strip('_')
+
+def vdp_path(v):
+    """Site-relative path (no leading slash) of a vehicle's detail page."""
+    seg = COND_SEG[v['cond']]
+    u = (v.get('url') or '').lstrip('/')
+    if re.fullmatch(re.escape(seg) + r'/[A-Za-z0-9_.-]+-id' + re.escape(v['id']) + r'\.html', u):
+        return u
+    return '{}/{}-{}-{}-id{}.html'.format(seg, _slug(v['year']), _slug(v['make']),
+                                          _slug(v['model']), v['id'])
+
+for cond, rows in INV.items():
+    for v in rows:
+        v['path'] = vdp_path(v)
 
 ALL = INV['new'] + INV['demos'] + INV['used']
 BY_ID = {v['id']: v for v in ALL}
+assert len({v['path'] for v in ALL}) == len(ALL), 'duplicate VDP paths'
 
 def e(s):
     return html.escape(s or '', quote=True)
@@ -125,13 +156,13 @@ _used_models = nav_model_links('used', 16)
 for i in range(0, len(_used_models), 6):
     chunk = _used_models[i:i + 6]
     _pre.append(('Popular models' if i == 0 else '&nbsp;',
-                 [(n, 'vehicle/{}.html'.format(vid)) for n, vid in chunk]))
+                 [(n, BY_ID[vid]['path']) for n, vid in chunk]))
 NAV[6] = ('Pre-Owned', 'used/search.html', _pre)
 
 _demo = [('Browse', [('All demo vehicles', 'demos/search.html'),
                      ('Jeep demos', 'demos/search.html'),
                      ('RAM demos', 'demos/search.html')]),
-         ('In stock now', [('{} {}'.format(v['year'], v['model']), 'vehicle/{}.html'.format(v['id']))
+         ('In stock now', [('{} {}'.format(v['year'], v['model']), v['path'])
                            for v in INV['demos'][:6]])]
 NAV[7] = ('Demos', 'demos/search.html', None)
 
@@ -178,7 +209,28 @@ HOURS = [('Sales', 'Mon&ndash;Thu 9:00&ndash;20:00 &middot; Fri 9:00&ndash;18:00
          ('Parts', 'Mon&ndash;Fri 7:30&ndash;18:00 &middot; Closed weekends'),
          ('Express Lane', 'Mon&ndash;Fri 7:00&ndash;18:00 &middot; Sat 8:00&ndash;14:00')]
 
-def head(title, root, active, desc=''):
+def page_context(page_type, inventory_type=None, page_name=None, vehicle=None, filters=None,
+                 compare=None):
+    ctx = collections.OrderedDict([('pageType', page_type), ('inventoryType', inventory_type)])
+    if page_name is not None:
+        ctx['pageName'] = page_name
+    ctx['vehicle'] = vehicle
+    ctx['filters'] = filters
+    # Only pages with vehicle cards carry `compare` (filled by js/site.js from the URL).
+    if compare is not None:
+        ctx['compare'] = compare
+    return ctx
+
+def ctx_script(ctx):
+    js = json.dumps(ctx, ensure_ascii=False, separators=(',', ':')).replace('</', '<\\/')
+    return '<script>window.pageContext={};</script>'.format(js)
+
+def body_attrs(ctx):
+    return ' data-page-type="{}" data-inventory-type="{}"'.format(
+        e(ctx['pageType']), e(ctx['inventoryType'] or ''))
+
+def head(title, root, active, desc='', ctx=None):
+    ctx = ctx or page_context('content')
     return '''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -187,8 +239,9 @@ def head(title, root, active, desc=''):
 <title>{title} | {dealer}</title>
 <meta name="description" content="{desc}">
 <link rel="stylesheet" href="{root}css/site.css">
+{ctx}
 </head>
-<body>
+<body{battrs}>
 <div class="annbar" id="annbar">
   <div class="wrap"><a href="{root}new/inventory/search.html">Employee Pricing On Now!</a></div>
   <button class="annclose" type="button" aria-label="Close">&times;</button>
@@ -220,7 +273,8 @@ def head(title, root, active, desc=''):
   </div>
 </div>
 '''.format(title=e(title), dealer=DEALER, desc=e(desc or title), root=root, maps=MAPS,
-           addr=ADDRESS, sales=SALES, service=SERVICE, logo=LOGO, nav=nav_html(root, active))
+           addr=ADDRESS, sales=SALES, service=SERVICE, logo=LOGO, nav=nav_html(root, active),
+           ctx=ctx_script(ctx), battrs=body_attrs(ctx))
 
 def foot(root):
     hrs = '\n'.join('<tr><td>{}</td><td>{}</td></tr>'.format(a, b) for a, b in HOURS)
@@ -248,8 +302,15 @@ def foot(root):
 </div></div>
 </footer>
 <script src="{root}js/site.js"></script>
+<script>
+  window.OPTIMY_LICENSE_KEY = '{optimy_key}';
+  window.OPTIMY_GUEST_HOSTNAME = '{optimy_host}';
+</script>
+<script src="{optimy_src}"></script>
+<optimy-launcher></optimy-launcher>
 </body>
 </html>'''.format(
+        optimy_key=OPTIMY_LICENSE_KEY, optimy_src=OPTIMY_SCRIPT, optimy_host=OPTIMY_GUEST_HOSTNAME,
         c1=col('Buying tools', [('Financing', 'pages/financing.html'),
                                 ('Current offers', 'pages/offers.html'),
                                 ('Clearance', 'pages/clearance.html')]),
@@ -269,7 +330,13 @@ def write(path, body):
     return path
 
 # ---------------------------------------------------------------- vehicle card
-def card(v, root):
+def compare_name(v):
+    """'{year} {make} {model} {trim before the first |}', trim part omitted if empty.
+    This exact string is what the `compare` URL param carries (FILTERS.md)."""
+    first = (v.get('trim') or '').split('|')[0].strip()
+    return ' '.join(str(x).strip() for x in [v['year'], v['make'], v['model'], first] if str(x).strip())
+
+def card(v, root, compare=True):
     badge = ''
     if v['cond'] == 'demos':
         badge = '<span class="badge demo">Demo</span>'
@@ -282,70 +349,109 @@ def card(v, root):
         v['km'] + ' km', v['trans'], v['drive'], v['fuel'],
         ('Ext: ' + v['ext']) if v['ext'] else ''] if x)
     return '''<article class="vcard" data-make="{make}" data-model="{model}" data-year="{year}"
-  data-cat="{cat}" data-trans="{trans}" data-fuel="{fuel}" data-ext="{ext}" data-drive="{drive}"
-  data-pricenum="{pn}" data-kmnum="{kn}">
+  data-cat="{cat}" data-trim="{trimbase}" data-options="{options}" data-trans="{trans}"
+  data-drive="{drive}" data-fuel="{fuel}" data-engine="{engine}" data-ext="{ext}"
+  data-int="{intc}" data-doors="{doors}" data-cyl="{cyl}"
+  data-pricenum="{pn}" data-kmnum="{kn}"
+  data-stock="{stock}" data-compare-name="{cmpname}">
   <div class="imgwrap">
     {badge}
-    <a href="{root}vehicle/{vid}.html"><img class="{imgcls}" src="{img}" alt="{alt}" loading="lazy"></a>
+    <a href="{root}{vpath}"><img class="{imgcls}" src="{img}" alt="{alt}" loading="lazy"></a>
     <div class="stockline">Stock: {stock}<br>VIN: {vin}</div>
   </div>
   <div class="body">
-    <h3 class="ttl"><a href="{root}vehicle/{vid}.html"><span class="mk">{make}</span> {year} {model}</a></h3>
+    <h3 class="ttl"><a href="{root}{vpath}"><span class="mk">{make}</span> {year} {model}</a></h3>
     <p class="trim">{trim}</p>
-    <div class="price"><span class="now">${price}</span>{was}</div>
+    <div class="price"><span class="now">${price}</span>{was}{cmp}</div>
     {plus}
     <div class="specs">{specs}</div>
     <div class="cta">
-      <a class="btn btn-red" href="{root}vehicle/{vid}.html">View details</a>
-      <a class="btn btn-out" href="{root}vehicle/{vid}.html">Confirm availability</a>
+      <a class="btn btn-red" href="{root}{vpath}">View details</a>
+      <a class="btn btn-out" href="{root}{vpath}">Confirm availability</a>
     </div>
   </div>
 </article>'''.format(make=e(v['make']), model=e(v['model']), year=e(v['year']), cat=e(v['cat']),
                      trans=e(v['trans']), fuel=e(v['fuel']), ext=e(v['ext']), drive=e(v['drive']),
                      pn=v['pricenum'], kn=v['kmnum'],
-                     badge=badge, root=root, vid=v['id'], img=e(v['img']),
+                     cmp=('<label class="cmp"><input type="checkbox" class="cmp-box" value="{}"> Compare</label>'.format(e(v['stock'])) if compare else ''),
+                     trimbase=e(v['trimbase']), options=e('|'.join(v['options'])),
+                     engine=e(v['engine']), intc=e(v['int']),
+                     doors=e(v['doors']), cyl=e(v['cyl']),
+                     badge=badge, root=root, vpath=v['path'], img=e(v['img']),
                      imgcls='fit' if 'carimages' in v['img'] else '',
                      alt=e(v['name']), stock=e(v['stock']), vin=e(v['vin']),
+                     cmpname=e(compare_name(v)),
                      trim=trim, price=e(v['price']), was=was, plus=plus, specs=specbits)
 
 # ---------------------------------------------------------------- facets
-FACET_DEFS = [('Category', 'cat'), ('Brand', 'make'), ('Model', 'model'), ('Year', 'year'),
-              ('Transmission', 'trans'), ('Drive train', 'drive'), ('Fuel', 'fuel'),
-              ('Exterior Colour', 'ext'), ('Doors', 'doors'), ('Cylinders', 'cyl')]
+# (sidebar label, key on the vehicle record, URL query param, card data-* attribute)
+FACET_DEFS = [
+    ('Category',        'cat',      'category',       'cat'),
+    ('Brand',           'make',     'brand',          'make'),
+    ('Model',           'model',    'model',          'model'),
+    ('Year',            'year',     'year',           'year'),
+    ('Trim',            'trimbase', 'trim',           'trim'),
+    ('Options',         'options',  'options',        'options'),
+    ('Transmission',    'trans',    'transmission',   'trans'),
+    ('Drive train',     'drive',    'drivetrain',     'drive'),
+    ('Fuel',            'fuel',     'fuel',           'fuel'),
+    ('Engine',          'engine',   'engine',         'engine'),
+    ('Exterior Colour', 'ext',      'exteriorColour', 'ext'),
+    ('Interior Colour', 'int',      'interiorColour', 'int'),
+    ('Doors',           'doors',    'doors',          'doors'),
+    ('Cylinders',       'cyl',      'cylinders',      'cyl'),
+]
+FACET_MAP = {param: attr for _, _, param, attr in FACET_DEFS}
+
+RANGE_DEFS = [
+    ('Price',   'pricenum', 'priceRangeLow',   'priceRangeHigh',   '$', '',    500),
+    ('Mileage', 'kmnum',    'mileageRangeLow', 'mileageRangeHigh', '',  ' km', 1000),
+]
+
+def _vals(v, key):
+    """A vehicle's value(s) for a facet key - always a list."""
+    x = v.get(key)
+    if isinstance(x, list):
+        return [i for i in x if i]
+    return [x] if x else []
+
+def range_facet(title, lo, hi, p_lo, p_hi, pre, suf, step):
+    return ('<details class="facet" open><summary>{t}</summary>'
+            '<div class="opts rangeopts"><div class="rangerow">'
+            '<input type="number" data-param="{plo}" data-bound="low" min="{lo}" max="{hi}"'
+            ' step="{st}" placeholder="{pre}{lo:,}{suf}" aria-label="{t} minimum">'
+            '<span class="sep">to</span>'
+            '<input type="number" data-param="{phi}" data-bound="high" min="{lo}" max="{hi}"'
+            ' step="{st}" placeholder="{pre}{hi:,}{suf}" aria-label="{t} maximum">'
+            '</div><p class="rangehint">In stock: {pre}{lo:,}{suf} &ndash; {pre}{hi:,}{suf}</p>'
+            '</div></details>').format(t=title, lo=lo, hi=hi, plo=p_lo, phi=p_hi,
+                                       pre=pre, suf=suf, st=step)
 
 def facets_html(rows):
     out = ['<aside class="facets"><div class="hd"><span>Refine your search</span>'
            '<button id="clearFilters" type="button">Clear all</button></div>']
-    for i, (title, key) in enumerate(FACET_DEFS):
-        counts = collections.Counter(v[key] for v in rows if v.get(key))
+    for i, (title, key, param, attr) in enumerate(FACET_DEFS):
+        counts = collections.Counter()
+        for v in rows:
+            for x in _vals(v, key):
+                counts[x] += 1
         if not counts:
             continue
-        order = sorted(counts.items(), key=lambda x: (-x[1], x[0]))
         if key == 'year':
             order = sorted(counts.items(), key=lambda x: x[0], reverse=True)
+        else:
+            order = sorted(counts.items(), key=lambda x: (-x[1], x[0]))
         opts = ''.join(
-            '<label><input type="checkbox" data-key="{k}" value="{v}"> {v}'
-            '<span class="cnt">{c}</span></label>'.format(k=key, v=e(val), c=cnt)
-            for val, cnt in order)
+            '<label><input type="checkbox" data-param="{p}" value="{v}">'
+            '<span class="lbl">{v}</span><span class="cnt">{c}</span></label>'.format(
+                p=param, v=e(val), c=cnt) for val, cnt in order)
         out.append('<details class="facet"{op}><summary>{t}</summary>'
                    '<div class="opts">{o}</div></details>'
                    .format(op=' open' if i < 4 else '', t=title, o=opts))
-    # price / mileage sliders shown as static ranges, like the real site
-    lo = min(v['pricenum'] for v in rows); hi = max(v['pricenum'] for v in rows)
-    klo = min(v['kmnum'] for v in rows);   khi = max(v['kmnum'] for v in rows)
-    out.append('<details class="facet"><summary>Price</summary><div class="opts">'
-               '<label>Range: ${:,} &ndash; ${:,}</label>'
-               '<input type="range" min="{}" max="{}" value="{}" style="width:100%">'
-               '</div></details>'.format(lo, hi, lo, hi, hi))
-    out.append('<details class="facet"><summary>Mileage</summary><div class="opts">'
-               '<label>Range: {:,} &ndash; {:,} km</label>'
-               '<input type="range" min="{}" max="{}" value="{}" style="width:100%">'
-               '</div></details>'.format(klo, khi, klo, khi, khi))
-    for extra in ['Trim', 'Powertrain', 'Options', 'Passengers', 'Engine',
-                  'New Arrivals', 'Delivery Status']:
-        out.append('<details class="facet"><summary>{}</summary>'
-                   '<div class="opts"><label style="color:#999">No refinements available'
-                   '</label></div></details>'.format(extra))
+    for title, key, p_lo, p_hi, pre, suf, step in RANGE_DEFS:
+        lo = min(v[key] for v in rows)
+        hi = max(v[key] for v in rows)
+        out.append(range_facet(title, lo, hi, p_lo, p_hi, pre, suf, step))
     out.append('</aside>')
     return '\n'.join(out)
 
@@ -367,6 +473,9 @@ SRP = {
                   blurb='Every pre-owned vehicle is safety inspected and comes with a free '
                         'CARFAX Canada history report.'),
 }
+
+# pageType / inventoryType value per inventory key (see PAGE-CONTEXT.md)
+INV_TYPE = {'new': 'new', 'demos': 'demo', 'used': 'used'}
 
 SORTS = [('', 'Sort order'), ('price-asc', 'Price: low to high'),
          ('price-desc', 'Price: high to low'), ('year-desc', 'Year: newest first'),
@@ -395,23 +504,52 @@ def srp(cond):
       <span class="viewtog"><button class="on" data-view="grid" type="button">&#9638; Grid</button><button data-view="list" type="button">&#9776; List</button></span>
     </div>
   </div>
+  <div id="activeFilters" class="chips" hidden></div>
   <p style="margin:-8px 0 18px;color:#6b6b6b;font-size:13px;max-width:720px">{blurb}</p>
+  <p id="noResults" class="noresults" hidden>No vehicles match these filters.
+     <button type="button" id="clearFilters2">Clear all filters</button></p>
   <div class="vgrid g3" id="results">
 {cards}
   </div>
   {pager}
 </div>
 </div></div>
+<script>window.FACET_MAP={facetmap};</script>
 '''.format(crumb=crumb, facets=facets_html(rows), h1=e(cfg['h1']), n=len(rows),
-           sorts=sorts, blurb=e(cfg['blurb']), cards=cards, pager=pager)
-    return write(cfg['path'], head(cfg['h1'], root, cfg['active'], cfg['blurb']) + body + foot(root))
+           sorts=sorts, blurb=e(cfg['blurb']), cards=cards, pager=pager,
+           facetmap=json.dumps(FACET_MAP))
+    ctx = page_context(INV_TYPE[cond], INV_TYPE[cond], filters={}, compare=[])
+    return write(cfg['path'], head(cfg['h1'], root, cfg['active'], cfg['blurb'], ctx) + body + foot(root))
 
 # ---------------------------------------------------------------- VDP
 SRP_LINK = {'new': 'new/inventory/search.html', 'demos': 'demos/search.html', 'used': 'used/search.html'}
 COND_LBL = {'new': 'New', 'demos': 'Demo', 'used': 'Pre-Owned'}
 
+def _num(s):
+    s = re.sub(r'[^\d]', '', s or '')
+    return int(s) if s else None
+
+def _txt(s):
+    return s if s else None
+
+def vehicle_context(v):
+    """Typed vehicle record for window.pageContext.vehicle (see PAGE-CONTEXT.md)."""
+    km = re.match(r'([\d,]+)\s*KM', v['desc'])
+    return collections.OrderedDict([
+        ('id', v['id']), ('vin', _txt(v['vin'])), ('stock', _txt(v['stock'])),
+        ('year', _num(v['year'])), ('make', _txt(v['make'])), ('model', _txt(v['model'])),
+        ('trim', _txt(v['trim'])),
+        ('price', _num(v.get('price'))), ('originalPrice', _num(v['was'])),
+        ('mileage', int(km.group(1).replace(',', '')) if km else None),
+        ('exteriorColour', _txt(v['ext'])), ('interiorColour', _txt(v['int'])),
+        ('bodyStyle', _txt(v['cat'])), ('engine', _txt(v['engine'])),
+        ('transmission', _txt(v['trans'])), ('drivetrain', _txt(v['drive'])),
+        ('fuel', _txt(v['fuel'])), ('doors', _num(v['doors'])), ('cylinders', _num(v['cyl'])),
+        ('imageUrl', _txt(v['img'])), ('url', '/' + v['path']), ('badge', _txt(v.get('badge'))),
+    ])
+
 def vdp(v):
-    root = '../'
+    root = '../' * v['path'].count('/')
     rows = [('Stock number', v['stock']), ('VIN', v['vin']), ('Condition', COND_LBL[v['cond']]),
             ('Body style', v['cat']), ('Mileage', v['km'] + ' km'), ('Engine', v['engine']),
             ('Cylinders', v['cyl']), ('Transmission', v['trans']), ('Drivetrain', v['drive']),
@@ -464,9 +602,10 @@ def vdp(v):
            thumbs=thumbs, fitmain=fit,
            trim=(e(v['trim']) + ' &middot; ') if v['trim'] else '', stock=e(v['stock']),
            vin=e(v['vin']), pricebox=pricebox, sales=SALES, addr=ADDRESS)
-    return write('vehicle/{}.html'.format(v['id']),
+    ctx = page_context('vdp', INV_TYPE[v['cond']], vehicle=vehicle_context(v))
+    return write(v['path'],
                  head(v['name'], root, COND_LBL[v['cond']] if v['cond'] != 'new' else 'New Vehicles',
-                      '{} for sale at {}'.format(v['name'], DEALER)) + body + foot(root))
+                      '{} for sale at {}'.format(v['name'], DEALER), ctx) + body + foot(root))
 
 # ---------------------------------------------------------------- home page
 NEWS = [('Sept 22, 2026', 'The 2027 RAM 1500 Rumble Bee returns',
@@ -586,13 +725,14 @@ def home():
 </div></section>
 '''.format(r=root, slides=slides, dots=dots, years=years, makes=makes, tiles=tiles,
            nn=len(INV['new']), nd=len(INV['demos']), nu=len(INV['used']),
-           feat='\n'.join(card(v, root) for v in featured),
-           demo='\n'.join(card(v, root) for v in demos),
-           used='\n'.join(card(v, root) for v in used),
+           feat='\n'.join(card(v, root, compare=False) for v in featured),
+           demo='\n'.join(card(v, root, compare=False) for v in demos),
+           used='\n'.join(card(v, root, compare=False) for v in used),
            hrs='\n'.join('<tr><td>{}</td><td>{}</td></tr>'.format(a, b) for a, b in HOURS),
            news=news)
     return write('index.html', head('New &amp; Used Chrysler Dodge Jeep Ram in Edmonton', root, 'Home',
-                                    'Chrysler, Dodge, Jeep and Ram dealer in Edmonton.') + body + foot(root))
+                                    'Chrysler, Dodge, Jeep and Ram dealer in Edmonton.',
+                                    page_context('home')) + body + foot(root))
 
 # ---------------------------------------------------------------- content pages
 def page(slug, title, sub, active, sections):
@@ -601,7 +741,8 @@ def page(slug, title, sub, active, sections):
     body = ('<div class="pagehead"><div class="wrap"><h1>{t}</h1><p>{s}</p></div></div>\n'
             '<div class="wrap"><div class="prose">\n{b}\n</div></div>\n'
             ).format(t=title, s=sub, b='\n'.join(sections))
-    return write('pages/{}.html'.format(slug), head(title, root, active, sub) + body + foot(root))
+    return write('pages/{}.html'.format(slug),
+                 head(title, root, active, sub, page_context('content', page_name=slug)) + body + foot(root))
 
 def cards2(items):
     return '<div class="cards2">' + ''.join(
@@ -741,15 +882,21 @@ def listing_page(slug, title, sub, active, rows, blurb):
       <span class="viewtog"><button class="on" data-view="grid" type="button">&#9638; Grid</button><button data-view="list" type="button">&#9776; List</button></span>
     </div>
   </div>
+  <div id="activeFilters" class="chips" hidden></div>
   <p style="margin:-8px 0 18px;color:#6b6b6b;font-size:13px;max-width:720px">{blurb}</p>
+  <p id="noResults" class="noresults" hidden>No vehicles match these filters.
+     <button type="button" id="clearFilters2">Clear all filters</button></p>
   <div class="vgrid g3" id="results">
 {cards}
   </div>
 </div>
 </div></div>
+<script>window.FACET_MAP={facetmap};</script>
 '''.format(r=root, t=title, n=len(rows), sorts=sorts, blurb=e(blurb),
-           facets=facets_html(rows), cards='\n'.join(card(v, root) for v in rows))
-    return write('pages/{}.html'.format(slug), head(title, root, active, sub) + body + foot(root))
+           facets=facets_html(rows), cards='\n'.join(card(v, root) for v in rows),
+           facetmap=json.dumps(FACET_MAP))
+    ctx = page_context('content', page_name=slug, filters={}, compare=[])
+    return write('pages/{}.html'.format(slug), head(title, root, active, sub, ctx) + body + foot(root))
 
 def clearance_page():
     rows = sorted([v for v in INV['new'] if v['was']],
@@ -778,5 +925,5 @@ if __name__ == '__main__':
     print('generated {} pages'.format(len(made)))
     print('  home    : index.html')
     print('  search  : ' + ', '.join(SRP[c]['path'] for c in SRP))
-    print('  vdp     : {} vehicle pages'.format(len(ALL)))
+    print('  vdp     : {} vehicle pages under new/inventory/, used/, demos/'.format(len(ALL)))
     print('  content : about, service, financing, offers, clearance, electric')

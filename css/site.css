@@ -183,6 +183,12 @@ a{color:inherit;text-decoration:none}
 .vcard .now{font-size:21px;font-weight:800}
 .vcard .was{font-size:13px;color:var(--muted);text-decoration:line-through}
 .vcard .plus{font-size:10px;color:var(--muted);margin:3px 0 0}
+/* compare checkbox, right end of the price row */
+.vcard .cmp{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;
+  color:var(--ink-2);cursor:pointer;user-select:none;padding:4px 0;white-space:nowrap}
+.vcard .cmp input{width:16px;height:16px;margin:0;accent-color:var(--red);cursor:pointer}
+.vcard .cmp.dis{opacity:.45;cursor:not-allowed}
+.vcard .cmp.dis input{cursor:not-allowed}
 .vcard .specs{font-size:12px;color:var(--ink-2);border-top:1px solid var(--line);
   margin-top:11px;padding-top:9px}
 .vcard .cta{margin-top:auto;padding-top:12px;display:flex;gap:7px}
@@ -296,3 +302,27 @@ footer{background:var(--ink);color:#b6b9be;font-size:13px;margin-top:0}
 
 /* manufacturer profile shots sit on white and must not be cropped */
 .vcard .imgwrap img.fit{object-fit:contain;background:#fff;padding:6px}
+
+/* ---------- filter UI: ranges, chips, empty state ---------- */
+.facet label .lbl{flex:1;min-width:0;overflow-wrap:anywhere}
+.facet label.zero{opacity:.4}
+.facet label.zero input{pointer-events:none}
+.rangeopts{padding-top:2px}
+.rangerow{display:flex;align-items:center;gap:7px}
+.rangerow input{width:100%;min-width:0;padding:7px 8px;border:1px solid #ccc;border-radius:3px;
+  font-family:inherit;font-size:13px}
+.rangerow input:focus{outline:2px solid var(--red);outline-offset:-1px;border-color:var(--red)}
+.rangerow .sep{font-size:12px;color:var(--muted);flex:0 0 auto}
+.rangehint{margin:8px 0 0;font-size:11px;color:var(--muted)}
+
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 14px}
+.chip{border:1px solid var(--line);background:#fff;border-radius:16px;padding:5px 12px;
+  font-family:inherit;font-size:12px;cursor:pointer;color:var(--ink-2);transition:.15s}
+.chip:hover{border-color:var(--red);color:var(--red)}
+.chip.clearall{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chip.clearall:hover{background:var(--red);border-color:var(--red);color:#fff}
+
+.noresults{margin:30px 0;padding:22px;border:1px dashed var(--line);border-radius:4px;
+  text-align:center;color:var(--muted);font-size:14px}
+.noresults button{margin-left:8px;border:0;background:none;color:var(--red);font-weight:700;
+  font-family:inherit;font-size:14px;cursor:pointer;text-decoration:underline}
