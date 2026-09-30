@@ -6,6 +6,9 @@
    Context params in the query string (PAGE-CONTEXT.md, ADR 0002).
    Every URL leads with the page's own context, in a fixed order:
      pageType, inventoryType, pageName, then on VDPs the vehicle params.
+   Listing pages (filter sidebar) write resultCount after the filter
+   ranges and before sort/view; it is owned by the page and always
+   rewritten from the real match count, and stripped everywhere else.
    Pages with vehicle cards end the query with the compare params
    (compare, compareStock), supplied through SiteUrl.tail by the
    Compare block below; those are owned by the page too.
@@ -26,6 +29,7 @@ var SiteUrl = (function () {
   ];
   var BASE = ['pageType', 'inventoryType', 'pageName'];
   var COMPARE = ['compare', 'compareStock'];
+  var RESULT_COUNT = 'resultCount';
 
   function ctx() { return window.pageContext || {}; }
   function isVdp() { return ctx().pageType === 'vdp'; }
@@ -38,6 +42,9 @@ var SiteUrl = (function () {
     // Always owned: pages with compare re-add them via the tail hook; pages
     // without compare checkboxes (home) drop them.
     COMPARE.forEach(function (k) { o[k] = 1; });
+    // Always owned: listing pages rewrite it from the real count (the filter
+    // engine's writeUrl); every other page drops it.
+    o[RESULT_COUNT] = 1;
     return o;
   }
 
@@ -71,8 +78,14 @@ var SiteUrl = (function () {
     });
   }
 
+  /* Rewrite the whole URL from current state. The filter engine replaces this
+     on listing pages (so resultCount keeps its slot before sort/view); elsewhere
+     it keeps the foreign params and re-adds the owned ones. */
+  function rewrite() { replace(foreignPairs()); }
+
   var api = { owned: owned, contextPairs: contextPairs, replace: replace,
-              foreignPairs: foreignPairs, filterEngine: false, tail: null };
+              foreignPairs: foreignPairs, rewrite: rewrite,
+              filterEngine: false, tail: null };
   return api;
 })();
 
@@ -172,8 +185,8 @@ var SiteUrl = (function () {
     if (b.checked && i < 0 && sel.length < MAX) sel.push(s);
     else if (!b.checked && i > -1) sel.splice(i, 1);
     render();
-    // Keep whatever else is in the URL (filters, sort, view); the tail re-adds compare.
-    SiteUrl.replace(SiteUrl.foreignPairs());
+    // Keep filters, resultCount, sort, view; the tail re-adds compare.
+    SiteUrl.rewrite();
     publish(true);
   });
 
@@ -181,7 +194,7 @@ var SiteUrl = (function () {
     if (!ev.target.closest('.cmp-clear')) return;
     sel = [];
     render();
-    SiteUrl.replace(SiteUrl.foreignPairs());
+    SiteUrl.rewrite();
     publish(true);
   });
 
@@ -357,6 +370,8 @@ var SiteUrl = (function () {
       if (sel[k] && sel[k].length) add(k, sel[k].map(encodeURIComponent).join(','));
     });
     Object.keys(bnd).forEach(function (k) { add(k, bnd[k]); });
+    // Page-owned: always the real number of matching cards, never the input.
+    add('resultCount', shownCount);
     if (sortEl && sortEl.value) add('sort', encodeURIComponent(sortEl.value));
     var v = document.querySelector('.viewtog button.on');
     if (v && v.dataset.view === 'list') add('view', 'list');
@@ -444,6 +459,7 @@ var SiteUrl = (function () {
     return f;
   }
   var lastFilters = null;
+  var shownCount = cards.length;  // cards matching the active filters
   function publishFilters(sel, bnd, notify) {
     var f = activeFilters(sel, bnd), key = JSON.stringify(f);
     if (key === lastFilters) return;
@@ -460,6 +476,9 @@ var SiteUrl = (function () {
       c.style.display = ok ? '' : 'none';
       if (ok) shown++;
     });
+    shownCount = shown;
+    // Set before publishFilters so pagecontext:change carries the new count.
+    (window.pageContext = window.pageContext || {}).resultCount = shown;
     if (countEl) countEl.textContent = shown;
     if (emptyEl) emptyEl.hidden = shown !== 0;
     var pager = document.querySelector('.pager');
@@ -505,6 +524,7 @@ var SiteUrl = (function () {
   });
 
   SiteUrl.filterEngine = true;
+  SiteUrl.rewrite = function () { writeUrl(selected(), bounds()); };
   readUrl();
   if (sortEl && sortEl.value) sortNow(sortEl.value);
   apply(false);
@@ -526,7 +546,10 @@ var SiteUrl = (function () {
   // Pages without the filter sidebar rewrite their URL here so it leads with
   // the true context params; stale ones are dropped, other params are kept.
   // (The filter engine has already done this on search-type pages.)
-  if (!SiteUrl.filterEngine) SiteUrl.replace(SiteUrl.foreignPairs());
+  if (!SiteUrl.filterEngine) {
+    SiteUrl.replace(SiteUrl.foreignPairs());
+    delete window.pageContext.resultCount;
+  }
   function ready() {
     window.dispatchEvent(new CustomEvent('pagecontext:ready', { detail: window.pageContext }));
   }

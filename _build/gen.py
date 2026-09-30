@@ -210,12 +210,16 @@ HOURS = [('Sales', 'Mon&ndash;Thu 9:00&ndash;20:00 &middot; Fri 9:00&ndash;18:00
          ('Express Lane', 'Mon&ndash;Fri 7:00&ndash;18:00 &middot; Sat 8:00&ndash;14:00')]
 
 def page_context(page_type, inventory_type=None, page_name=None, vehicle=None, filters=None,
-                 compare=None):
+                 result_count=None, compare=None):
     ctx = collections.OrderedDict([('pageType', page_type), ('inventoryType', inventory_type)])
     if page_name is not None:
         ctx['pageName'] = page_name
     ctx['vehicle'] = vehicle
     ctx['filters'] = filters
+    # Only listing pages carry `resultCount`: the unfiltered card count here,
+    # kept current by js/site.js as filters change.
+    if result_count is not None:
+        ctx['resultCount'] = result_count
     # Only pages with vehicle cards carry `compare` (filled by js/site.js from the URL).
     if compare is not None:
         ctx['compare'] = compare
@@ -519,7 +523,7 @@ def srp(cond):
 '''.format(crumb=crumb, facets=facets_html(rows), h1=e(cfg['h1']), n=len(rows),
            sorts=sorts, blurb=e(cfg['blurb']), cards=cards, pager=pager,
            facetmap=json.dumps(FACET_MAP))
-    ctx = page_context(INV_TYPE[cond], INV_TYPE[cond], filters={}, compare=[])
+    ctx = page_context(INV_TYPE[cond], INV_TYPE[cond], filters={}, result_count=len(rows), compare=[])
     return write(cfg['path'], head(cfg['h1'], root, cfg['active'], cfg['blurb'], ctx) + body + foot(root))
 
 # ---------------------------------------------------------------- VDP
@@ -897,7 +901,7 @@ def listing_page(slug, title, sub, active, rows, blurb):
 '''.format(r=root, t=title, n=len(rows), sorts=sorts, blurb=e(blurb),
            facets=facets_html(rows), cards='\n'.join(card(v, root) for v in rows),
            facetmap=json.dumps(FACET_MAP))
-    ctx = page_context('content', page_name=slug, filters={}, compare=[])
+    ctx = page_context('content', page_name=slug, filters={}, result_count=len(rows), compare=[])
     return write('pages/{}.html'.format(slug), head(title, root, active, sub, ctx) + body + foot(root))
 
 def clearance_page():
@@ -916,6 +920,38 @@ def electric_page():
                         'hybrid Pacifica models currently in stock.')
 
 # ---------------------------------------------------------------- build
+# ---------------------------------------------------------------- inventory export
+# One flat JSON file in the Optimy inventory-table shape (see README).
+EXPORT_STATUS = {'new': 'new', 'used': 'used', 'demos': 'demo'}
+DEALER_CITY   = 'Edmonton'
+
+def inventory_export():
+    """Every vehicle on the site, one record per car, in listing order.
+    page_num is 0-based and car_index 1-based within that status's listing
+    (all cars sit on one listing page). Missing text -> "", missing number -> null."""
+    out = []
+    for cond in ('new', 'used', 'demos'):
+        for i, v in enumerate(INV[cond], 1):
+            out.append({
+                'page_num': 0,
+                'car_index': i,
+                'image': v.get('img') or '',
+                'status': EXPORT_STATUS[cond],
+                'price': float(v['pricenum']) if v['pricenum'] else None,
+                'make': v.get('make') or '',
+                'model': v.get('model') or '',
+                'year': float(v['year']) if str(v.get('year') or '').isdigit() else None,
+                'trim': v['trimbase'],
+                'mileage': float(v['kmnum']) if v['kmnum'] else None,
+                'color': v['ext'],
+                'city': DEALER_CITY,
+                'stock_id': v.get('stock') or '',
+                'vin': v.get('vin') or '',
+            })
+    with open(os.path.join(OUT, 'inventory.json'), 'w') as fh:
+        json.dump(out, fh, indent=4)
+    return out
+
 if __name__ == '__main__':
     made = [home()]
     for c in SRP:
@@ -924,7 +960,9 @@ if __name__ == '__main__':
         made.append(vdp(v))
     made += [about_page(), service_page(), financing_page(), offers_page(),
              clearance_page(), electric_page()]
+    exported = inventory_export()
     print('generated {} pages'.format(len(made)))
+    print('  export  : inventory.json ({} vehicles)'.format(len(exported)))
     print('  home    : index.html')
     print('  search  : ' + ', '.join(SRP[c]['path'] for c in SRP))
     print('  vdp     : {} vehicle pages under new/inventory/, used/, demos/'.format(len(ALL)))

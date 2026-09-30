@@ -21,7 +21,7 @@ it reads filters ([0001](0001-filter-url-query-contract.md)) and page context
 ## Decision
 
 - Two params, `compare` (display names) and `compareStock` (stock numbers), in tick order, encoded like the facets: a literal comma between values, each value `encodeURIComponent`-ed on its own.
-- Written only while 2 or more are ticked, via `history.replaceState`, and always last: after the context, filter, range, sort and view params. `SiteUrl.replace` appends them through a `tail` hook, so the filter engine and the compare block never drop each other's params.
+- Written only while 2 or more are ticked, via `history.replaceState`, and always last: after the context, filter, range, `resultCount` ([0004](0004-result-count-in-url.md)), sort and view params. `SiteUrl.replace` appends them through a `tail` hook, so the filter engine and the compare block never drop each other's params.
 - Maximum 4. At 4, the other checkboxes are disabled with a tooltip.
 - On load, only `compareStock` is read. Unknown stocks are dropped, and the page rewrites both params from its own cards, so `compare` is page-owned like the context params.
 - Selection is independent of filters. "Clear all" keeps it, and hidden cards stay ticked.

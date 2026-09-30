@@ -40,6 +40,30 @@ No thousands separators, no currency symbol. Either bound may be sent alone.
 | Price | `priceRangeLow`, `priceRangeHigh` | `priceRangeLow=13000&priceRangeHigh=15000` |
 | Mileage | `mileageRangeLow`, `mileageRangeHigh` | `mileageRangeLow=0&mileageRangeHigh=80000` |
 
+## Result count
+
+| Param | Value |
+|---|---|
+| `resultCount` | Number of vehicle cards matching the active filters: the same number as the "(N)" in the page heading. Not the page size |
+
+- **Always written** on these pages: on load, on every filter change and after
+  "Clear all". An unfiltered page carries the full count.
+- **Page-owned, output only.** An incoming `resultCount` is ignored and overwritten
+  with the real count, so `resultCount=999` in a link is corrected on load. It
+  cannot be used to drive the page.
+- **Not a filter.** Sort, view and compare changes leave it unchanged.
+- Other pages (home, VDPs, other content pages) strip it from the URL.
+- Also in `window.pageContext.resultCount`
+  ([PAGE-CONTEXT.md](PAGE-CONTEXT.md#resultcount)).
+
+Real example, used SUVs up to $20,000 (5 of the 36 used cars):
+
+```
+/used/search.html?pageType=used&inventoryType=used&category=SUV&priceRangeHigh=20000&resultCount=5
+```
+
+Decision record: [docs/adr/0004-result-count-in-url.md](docs/adr/0004-result-count-in-url.md).
+
 ## View state
 
 | Control | Param | Values |
@@ -55,14 +79,17 @@ No thousands separators, no currency symbol. Either bound may be sent alone.
   [PAGE-CONTEXT.md](PAGE-CONTEXT.md#context-in-the-query-string)). Those are not
   filters, and they are ignored on load.
 - Filter params are written only while active, so an unfiltered page has only the
-  context params, e.g. `/used/search.html?pageType=used&inventoryType=used`.
-  "Clear all" removes filter params but keeps the context params, `sort` and `view`.
+  context params and the full `resultCount`, e.g.
+  `/used/search.html?pageType=used&inventoryType=used&resultCount=36`.
+  "Clear all" removes filter params but keeps the context params, `sort` and `view`,
+  and resets `resultCount` to the full count.
 - Multiple values are joined with a literal comma; each value is URL-encoded on
   its own, so a comma *inside* a label is sent as `%2C`
   (`options=Sun%2C%20Sound%20%26%20NAV%20Group`). A fully encoded list
   (`brand=Jeep%2CRAM`) is also accepted on load.
 - Param order in the URL is fixed (context params, then facets, then ranges,
-  then sort/view, then the [compare params](#compare)), so do not rely on it
+  then [`resultCount`](#result-count), then sort/view, then the
+  [compare params](#compare)), so do not rely on it
   matching the order filters were clicked.
 - The URL updates via `history.replaceState` — it changes live without adding
   browser history entries, so Back leaves the page rather than stepping back
@@ -74,7 +101,7 @@ No thousands separators, no currency symbol. Either bound may be sent alone.
 ## Example
 
 ```
-/used/search.html?pageType=used&inventoryType=used&brand=Jeep,RAM&category=SUV&priceRangeLow=13000&priceRangeHigh=45000&sort=price-asc
+/used/search.html?pageType=used&inventoryType=used&brand=Jeep,RAM&category=SUV&priceRangeLow=13000&priceRangeHigh=45000&resultCount=5&sort=price-asc
 ```
 
 Reading it from another application:
@@ -84,6 +111,7 @@ const p = new URLSearchParams(location.search);
 const brands = p.get('brand')?.split(',') ?? [];      // ['Jeep','RAM']
 const lo     = p.get('priceRangeLow');                // '13000'
 const hi     = p.get('priceRangeHigh');               // '45000'
+const n      = Number(p.get('resultCount'));          // matching cards
 ```
 
 ## Compare
@@ -127,7 +155,7 @@ The selection is carried in two params, which always come last in the query stri
 Example, two real used vehicles (the MINI has no trim):
 
 ```
-/used/search.html?pageType=used&inventoryType=used&compare=2017%20MINI%20Cooper%20Hardtop,2020%20Toyota%20C-HR%20LE&compareStock=17A7269,XC1882A
+/used/search.html?pageType=used&inventoryType=used&resultCount=36&compare=2017%20MINI%20Cooper%20Hardtop,2020%20Toyota%20C-HR%20LE&compareStock=17A7269,XC1882A
 ```
 
 ```js

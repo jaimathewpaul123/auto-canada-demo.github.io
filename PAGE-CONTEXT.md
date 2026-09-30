@@ -34,9 +34,12 @@ Param order is fixed. Each value is encoded with `encodeURIComponent`, and a
    | `exteriorColour`, `interiorColour`, `engine`, `transmission`, `drivetrain`, `fuel`, `doors`, `cylinders` | same names |
 
    `imageUrl`, `url` and `badge` are not written.
-5. Pages with the filter sidebar: the filter params, then `sort` and `view`, as in
-   [FILTERS.md](FILTERS.md). "Clear all" removes these but never the context params,
-   so an unfiltered search page still carries `?pageType=…&inventoryType=…`.
+5. Pages with the filter sidebar: the filter params, then `resultCount`, then `sort`
+   and `view`, as in [FILTERS.md](FILTERS.md). "Clear all" removes the filters but
+   never the context params, so an unfiltered search page still carries
+   `?pageType=…&inventoryType=…&resultCount=<full count>`. `resultCount` is the number
+   of cards matching the filters ([FILTERS.md](FILTERS.md#result-count)); the page
+   owns it, overwrites any incoming value, and strips it on every other page.
 6. Pages with vehicle cards: `compare` and `compareStock`, last, and only while 2 or
    more cars are ticked ([FILTERS.md](FILTERS.md#compare)). The page owns these too:
    it restores the selection from `compareStock` and rewrites both.
@@ -64,11 +67,11 @@ These are the real generated pages.
 | pageType | URL after load |
 |---|---|
 | `home` | `/index.html?pageType=home` |
-| `new` | `/new/inventory/search.html?pageType=new&inventoryType=new` |
-| `used` | `/used/search.html?pageType=used&inventoryType=used&brand=Jeep,RAM&priceRangeLow=13000` |
-| `demo` | `/demos/search.html?pageType=demo&inventoryType=demo&sort=price-asc` |
+| `new` | `/new/inventory/search.html?pageType=new&inventoryType=new&resultCount=53` |
+| `used` | `/used/search.html?pageType=used&inventoryType=used&category=SUV&priceRangeHigh=20000&resultCount=5` |
+| `demo` | `/demos/search.html?pageType=demo&inventoryType=demo&resultCount=6&sort=price-asc` |
 | `content` | `/pages/service.html?pageType=content&pageName=service` |
-| `content` (with filters) | `/pages/clearance.html?pageType=content&pageName=clearance&category=Truck` |
+| `content` (with filters) | `/pages/clearance.html?pageType=content&pageName=clearance&category=Truck&resultCount=8` |
 
 VDPs, one per inventory type:
 
@@ -136,6 +139,7 @@ any other script runs. The same values are mirrored on `<body>`:
 | `pageName` | string, the file name without `.html` | `content` pages only |
 | `vehicle` | object or `null` | object on VDPs only |
 | `filters` | object or `null` | object wherever the filter sidebar runs, `null` elsewhere |
+| `resultCount` | number | listing pages only (the search pages, clearance, electric): cards matching the active filters. Absent elsewhere |
 | `compare` | array | pages with compare checkboxes only: the search pages, clearance and electric. Absent elsewhere, including home |
 
 ### `vehicle`
@@ -168,6 +172,14 @@ The generated HTML always holds `{}`. `js/site.js` fills it from the URL before
 and `pages/electric.html` run the same filter sidebar. They are `content` pages,
 but `filters` is an object there too.
 
+### `resultCount`
+
+The number of vehicle cards matching the active filters, the same as the "(N)" in
+the heading and the `resultCount` URL param. The generated HTML holds the
+unfiltered count; `js/site.js` recomputes it on load (before `pagecontext:ready`)
+and on every filter change, before `pagecontext:change` fires, so the event's
+`detail.resultCount` is already the new count. Used SUVs up to $20,000 give `5`.
+
 ### `compare`
 
 The cars ticked for comparison, in the order they were ticked, as
@@ -184,12 +196,12 @@ Home (`/index.html`):
 {"pageType":"home","inventoryType":null,"vehicle":null,"filters":null}
 ```
 
-Search (`/used/search.html?brand=Jeep,RAM&priceRangeLow=13000&sort=price-asc&view=list`), after `pagecontext:ready`:
+Search (`/used/search.html?category=SUV&priceRangeHigh=20000&sort=price-asc&view=list`), after `pagecontext:ready`:
 
 ```json
 {"pageType":"used","inventoryType":"used","vehicle":null,
- "filters":{"brand":["Jeep","RAM"],"priceRangeLow":13000,"sort":"price-asc","view":"list"},
- "compare":[]}
+ "filters":{"category":["SUV"],"priceRangeHigh":20000,"sort":"price-asc","view":"list"},
+ "resultCount":5,"compare":[]}
 ```
 
 Same page with two cars ticked (`…&compare=2017%20MINI%20Cooper%20Hardtop,2020%20Toyota%20C-HR%20LE&compareStock=17A7269,XC1882A`):
@@ -234,7 +246,7 @@ Both are dispatched on `window` as a `CustomEvent`. `event.detail` is `window.pa
 | Event | When |
 |---|---|
 | `pagecontext:ready` | Once, on `DOMContentLoaded`, after the filter sidebar has read the URL. Every page |
-| `pagecontext:change` | When the active filters change: a facet, range, sort, view, chip, or "Clear all". Also when a compare tick changes `compare`, so ticking the first car fires nothing (it stays `[]`) and ticking the second does. Not fired on load, and not fired when a change leaves `filters` and `compare` the same |
+| `pagecontext:change` | When the active filters change: a facet, range, sort, view, chip, or "Clear all". `resultCount` is already updated when it fires. Also when a compare tick changes `compare`, so ticking the first car fires nothing (it stays `[]`) and ticking the second does. Not fired on load, and not fired when a change leaves `filters` and `compare` the same |
 
 ## Reading it from another application
 
@@ -261,5 +273,7 @@ of `js/site.js`, and `publishFilters` in the filter engine keeps `filters` curre
 `SiteUrl` at the top of `js/site.js` writes the context params from
 `window.pageContext`, and appends the compare params through its `tail` hook, which
 the compare block right after it sets. `card` and `compare_name` in `_build/gen.py`
-emit the checkbox and `data-compare-name`/`data-stock`. The filter engine's `writeUrl` calls it on search-type pages,
+emit the checkbox and `data-compare-name`/`data-stock`. The filter engine's `writeUrl` calls it on search-type pages, adding `resultCount`
+(it also sets `SiteUrl.rewrite`, which the compare block calls so `resultCount`
+keeps its slot),
 and the page-context block calls it on every other page.
