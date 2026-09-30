@@ -321,6 +321,13 @@ footer{background:var(--ink);color:#b6b9be;font-size:13px;margin-top:0}
 .chip:hover{border-color:var(--red);color:var(--red)}
 .chip.clearall{background:var(--ink);color:#fff;border-color:var(--ink)}
 .chip.clearall:hover{background:var(--red);border-color:var(--red);color:#fff}
+.cmpbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px;padding:8px 12px;
+  border:1px solid var(--line);border-radius:6px;background:#fafafa;font-size:14px}
+.cmpbar[hidden]{display:none}
+.cmpbar-txt{flex:1;min-width:0}
+.cmp-clear{border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:16px;
+  padding:5px 12px;font:inherit;font-size:13px;cursor:pointer}
+.cmp-clear:hover{background:var(--red);border-color:var(--red)}
 
 .noresults{margin:30px 0;padding:22px;border:1px dashed var(--line);border-radius:4px;
   text-align:center;color:var(--muted);font-size:14px}

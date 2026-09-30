@@ -505,6 +505,7 @@ def srp(cond):
     </div>
   </div>
   <div id="activeFilters" class="chips" hidden></div>
+  <div id="compareBar" class="cmpbar" hidden></div>
   <p style="margin:-8px 0 18px;color:#6b6b6b;font-size:13px;max-width:720px">{blurb}</p>
   <p id="noResults" class="noresults" hidden>No vehicles match these filters.
      <button type="button" id="clearFilters2">Clear all filters</button></p>
@@ -883,6 +884,7 @@ def listing_page(slug, title, sub, active, rows, blurb):
     </div>
   </div>
   <div id="activeFilters" class="chips" hidden></div>
+  <div id="compareBar" class="cmpbar" hidden></div>
   <p style="margin:-8px 0 18px;color:#6b6b6b;font-size:13px;max-width:720px">{blurb}</p>
   <p id="noResults" class="noresults" hidden>No vehicles match these filters.
      <button type="button" id="clearFilters2">Clear all filters</button></p>

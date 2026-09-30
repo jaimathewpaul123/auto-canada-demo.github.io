@@ -91,6 +91,10 @@ const hi     = p.get('priceRangeHigh');               // '45000'
 Vehicle cards have a "Compare" checkbox on the three search pages and on
 `/pages/clearance.html` and `/pages/electric.html`. The home page carousels have
 none, and pages without compare checkboxes drop any `compare`/`compareStock` params.
+While at least one car is ticked, a bar above the cards shows "Compare: N of 4
+selected" with a **Clear compare** button. It unticks every car and removes both
+compare params; filter params are untouched. The filters' "Clear all" does not
+clear the compare selection.
 The selection is carried in two params, which always come last in the query string.
 
 | Param | Value |

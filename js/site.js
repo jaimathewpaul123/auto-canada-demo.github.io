@@ -109,7 +109,20 @@ var SiteUrl = (function () {
     return ['compare=' + join('name'), 'compareStock=' + join('stock')];
   };
 
+  var bar = document.getElementById('compareBar');
+
+  function renderBar() {
+    if (!bar) return;
+    bar.hidden = !sel.length;
+    if (!sel.length) { bar.innerHTML = ''; return; }
+    var hint = sel.length < 2 ? ' &middot; select one more to compare' : '';
+    bar.innerHTML = '<span class="cmpbar-txt"><b>Compare:</b> ' + sel.length + ' of ' + MAX +
+      ' selected' + hint + '</span>' +
+      '<button type="button" class="cmp-clear">Clear compare</button>';
+  }
+
   function render() {
+    renderBar();
     var full = sel.length >= MAX;
     boxes.forEach(function (b) {
       var on = sel.indexOf(stockOf(b)) > -1, off = full && !on;
@@ -160,6 +173,14 @@ var SiteUrl = (function () {
     else if (!b.checked && i > -1) sel.splice(i, 1);
     render();
     // Keep whatever else is in the URL (filters, sort, view); the tail re-adds compare.
+    SiteUrl.replace(SiteUrl.foreignPairs());
+    publish(true);
+  });
+
+  if (bar) bar.addEventListener('click', function (ev) {
+    if (!ev.target.closest('.cmp-clear')) return;
+    sel = [];
+    render();
     SiteUrl.replace(SiteUrl.foreignPairs());
     publish(true);
   });
