@@ -67,6 +67,13 @@ Wrangler, Gladiator, Recon, Ram 1500/2500/3500, Durango, Charger and Pacifica ar
 **fabricated** (VINs prefixed `MOCK`) against real manufacturer profile images, so the
 demo shows the whole lineup. All other listings are real.
 
+**Used-car price reductions are demo values, not real prices.** Every used listing
+carries a "Reduced Price" badge, but the scrape had no previous price. `_build/gen.py`
+therefore adds a 3–8% reduction (rounded to $50, minimum $300) to each one, picked from a
+hash of the stock number so every rebuild gives the same numbers. The selling price is
+unchanged and the source `_build/inventory.json` is not edited. See
+[docs/adr/0005](docs/adr/0005-demo-used-price-reductions.md).
+
 ## Rebuilding
 
 `_build/` holds the generator. Edit `inventory.json` or `gen.py`, then:

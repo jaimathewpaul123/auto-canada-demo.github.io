@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Static site generator for the Capital CDJR mock site."""
-import json, os, re, html, collections
+import json, os, re, html, collections, hashlib
 
 SRC  = os.path.dirname(os.path.abspath(__file__))
 OUT  = os.path.dirname(SRC)
@@ -26,6 +26,27 @@ def km_num(desc):
 
 def price_num(p):
     return int(re.sub(r'[^\d]', '', p)) if p else 0
+
+def fmt(n):
+    return '{:,}'.format(n)
+
+# ---- demo price reductions for used cars
+# Every used listing carries a 'Reduced Price' badge but the scrape has no previous
+# price, so the VDP showed no reduction and pageContext.vehicle.originalPrice was null.
+# Give each such car a DEMO reduction of 3-8%, picked from a hash of its stock number
+# (not `random`) so every regeneration produces the same numbers. The selling price is
+# untouched; only a 'Previous Price' / 'Price Reduction' breakdown is added, in the same
+# shape as the new cars' breakdown. These are not real prices (docs/adr/0005).
+def demo_reduction(v):
+    price = price_num(v.get('price'))
+    pct = 3 + int(hashlib.md5(v['stock'].encode('utf-8')).hexdigest(), 16) % 6   # 3..8
+    drop = max(300, int(round(price * pct / 5000.0)) * 50)   # nearest $50, min $300
+    return [['Previous Price', fmt(price + drop)], ['Price Reduction', '-' + fmt(drop)]]
+
+for v in INV.get('used', []):
+    if (v.get('badge') == 'Reduced Price' and not v.get('was') and not v.get('breakdown')
+            and price_num(v.get('price'))):
+        v['breakdown'] = demo_reduction(v)
 
 for cond, rows in INV.items():
     for v in rows:
@@ -545,6 +566,7 @@ def vehicle_context(v):
         ('year', _num(v['year'])), ('make', _txt(v['make'])), ('model', _txt(v['model'])),
         ('trim', _txt(v['trim'])),
         ('price', _num(v.get('price'))), ('originalPrice', _num(v['was'])),
+        ('priceDrop', (_num(v['was']) - _num(v.get('price'))) if v['was'] else None),
         ('mileage', int(km.group(1).replace(',', '')) if km else None),
         ('exteriorColour', _txt(v['ext'])), ('interiorColour', _txt(v['int'])),
         ('bodyStyle', _txt(v['cat'])), ('engine', _txt(v['engine'])),
