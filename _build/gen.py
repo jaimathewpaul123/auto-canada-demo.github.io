@@ -323,7 +323,8 @@ def foot(root):
 </div></div></div>
 <div class="fbar"><div class="wrap">
   <span>&copy; 2026 {dealer}. Mock site for demonstration only &mdash; not affiliated with the real dealership.</span>
-  <span><a href="{root}pages/about.html">Contact &amp; hours</a></span>
+  <span><a href="{root}pages/about.html">Contact &amp; hours</a>
+    &middot; <a href="?resetDemo=1" class="reset-demo" title="Clear this demo's local and session storage and reload">Reset demo</a></span>
 </div></div>
 </footer>
 <script src="{root}js/site.js"></script>

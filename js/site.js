@@ -2,6 +2,18 @@
    nav, announcement bar, hero carousel, vehicle gallery,
    and URL-synced inventory filtering. */
 
+/* ---------------------------------------------------------- demo reset
+   ?resetDemo=1 (the footer's "Reset demo" link) clears localStorage and
+   sessionStorage for this site, then drops every query param. It runs at the
+   top of site.js, before the Optimy plugin script loads, so state the plugin
+   writes while the previous page unloads is cleared too. */
+(function () {
+  if (!/(?:^|[?&])resetDemo=1(?:&|$)/.test(location.search)) return;
+  try { localStorage.clear(); } catch (e) {}
+  try { sessionStorage.clear(); } catch (e) {}
+  history.replaceState(null, '', location.pathname + location.hash);
+})();
+
 /* ================================================================
    Context params in the query string (PAGE-CONTEXT.md, ADR 0002).
    Every URL leads with the page's own context, in a fixed order:
