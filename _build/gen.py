@@ -274,6 +274,7 @@ def head(title, root, active, desc='', ctx=None):
 
 <header class="masthead"><div class="wrap">
   <a class="brand" href="{root}index.html"><img src="{logo}" alt="{dealer}"></a>
+  <a class="reset-demo-btn" href="?resetDemo=1" title="Clear this demo's local and session storage and reload">&#8635; Reset demo</a>
   <div class="dealerinfo">
     <p class="dname">{dealer}</p>
     <p class="daddr"><a href="{maps}" target="_blank" rel="noopener">&#10148; {addr}</a></p>
