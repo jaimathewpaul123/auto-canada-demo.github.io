@@ -30,6 +30,7 @@ Param order is fixed. Each value is encoded with `encodeURIComponent`, and a
    | `vehicleId`, `vin`, `stock` | `id`, `vin`, `stock` |
    | `year`, `brand`, `model`, `trim` | `year`, `make`, `model`, `trim` |
    | `price`, `originalPrice`, `priceDrop`, `mileage` | same names |
+   | `openRecalls` | same name; demo data, written only when set ([ADR 0006](docs/adr/0006-demo-open-recalls.md)) |
    | `category` | `bodyStyle` |
    | `exteriorColour`, `interiorColour`, `engine`, `transmission`, `drivetrain`, `fuel`, `doors`, `cylinders` | same names |
 
@@ -157,6 +158,7 @@ Missing values are `null`, never `""` or `0`.
 | `originalPrice` | number or `null` | CAD, the pre-discount price. `null` unless it is higher than `price` |
 | `priceDrop` | number or `null` | CAD, `originalPrice - price` (e.g. `6250`). `null` whenever `originalPrice` is `null`. On used cars this is a demo value ([ADR 0005](docs/adr/0005-demo-used-price-reductions.md)) |
 | `mileage` | number | km |
+| `openRecalls` | number or `null` | Count of open recalls. Demo data: only `/used/2024-Jeep-Compass-id14351116.html` has one (`1`); every other car is `null`, so the param is absent from its URL ([ADR 0006](docs/adr/0006-demo-open-recalls.md)) |
 | `exteriorColour`, `interiorColour`, `bodyStyle`, `engine`, `transmission`, `drivetrain`, `fuel` | string or `null` | `bodyStyle` is the inventory Category (`SUV`, `Cars`, `Trucks`, ...) |
 | `doors`, `cylinders` | number or `null` | |
 | `imageUrl` | string | absolute URL of the main photo |

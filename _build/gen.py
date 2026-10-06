@@ -282,7 +282,6 @@ def head(title, root, active, desc='', ctx=None):
       <tr><td>Service:</td><td><a href="tel:{service}">{service}</a></td></tr>
       <tr><td>Parts:</td><td><a href="tel:{sales}">{sales}</a></td></tr>
     </table>
-    <a class="reset-demo-btn" href="?resetDemo=1" title="Clear this demo's local and session storage and reload">&#8635; Reset demo</a>
   </div>
 </div></header>
 
@@ -560,6 +559,14 @@ def _num(s):
 def _txt(s):
     return s if s else None
 
+# ---- demo open recalls
+# The scrape has no recall data. To demo the plugin's recall nudge, a few VDPs carry
+# a DEMO open-recall count, keyed by vehicle id. Every other car has openRecalls null,
+# so the param is absent from its URL (docs/adr/0006).
+DEMO_OPEN_RECALLS = {
+    '14351116': 1,   # used 2024 Jeep Compass
+}
+
 def vehicle_context(v):
     """Typed vehicle record for window.pageContext.vehicle (see PAGE-CONTEXT.md)."""
     km = re.match(r'([\d,]+)\s*KM', v['desc'])
@@ -570,6 +577,7 @@ def vehicle_context(v):
         ('price', _num(v.get('price'))), ('originalPrice', _num(v['was'])),
         ('priceDrop', (_num(v['was']) - _num(v.get('price'))) if v['was'] else None),
         ('mileage', int(km.group(1).replace(',', '')) if km else None),
+        ('openRecalls', DEMO_OPEN_RECALLS.get(v['id'])),
         ('exteriorColour', _txt(v['ext'])), ('interiorColour', _txt(v['int'])),
         ('bodyStyle', _txt(v['cat'])), ('engine', _txt(v['engine'])),
         ('transmission', _txt(v['trans'])), ('drivetrain', _txt(v['drive'])),

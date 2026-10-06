@@ -34,7 +34,7 @@ var SiteUrl = (function () {
     ['vehicleId', 'id'], ['vin', 'vin'], ['stock', 'stock'],
     ['year', 'year'], ['brand', 'make'], ['model', 'model'], ['trim', 'trim'],
     ['price', 'price'], ['originalPrice', 'originalPrice'], ['priceDrop', 'priceDrop'],
-    ['mileage', 'mileage'],
+    ['mileage', 'mileage'], ['openRecalls', 'openRecalls'],
     ['category', 'bodyStyle'], ['exteriorColour', 'exteriorColour'],
     ['interiorColour', 'interiorColour'], ['engine', 'engine'],
     ['transmission', 'transmission'], ['drivetrain', 'drivetrain'],
